@@ -5,7 +5,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { googleLogout, useGoogleLogin } from '@react-oauth/google';
+import { auth, loginWithGoogle, logout } from '@/service/firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigation, Link } from 'react-router-dom';
 import { FcGoogle } from "react-icons/fc";
 import { generateAvatarPlaceholder } from '@/utils/placeholder-images';
@@ -28,52 +29,16 @@ export function Header() {
   const placeholderSvg = `data:image/svg+xml;base64,${btoa(generateAvatarPlaceholder())}`;
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    if (!auth) return;
+    return onAuthStateChanged(auth, current => setUser(current ? {name:current.displayName,email:current.email,picture:current.photoURL} : null));
   }, []);
-
-  const login = useGoogleLogin({
-    onSuccess: (codeResponse) => {
-      GetUserProfile(codeResponse);
-    },
-    onError: (error) => {
-      console.error('Login Failed:', error);
-      toast.error('Login failed. Please try again.');
-    }
-  });
-
-  const GetUserProfile = async (codeResponse) => {
-    try {
-      const response = await axios.get(
-        `https://www.googleapis.com/oauth2/v1/userinfo?access_token=${codeResponse.access_token}`,
-        {
-          headers: {
-            Authorization: `Bearer ${codeResponse.access_token}`,
-            Accept: 'application/json'
-          }
-        }
-      );
-      localStorage.setItem('user', JSON.stringify(response.data));
-      setUser(response.data);
-      toast.success('Successfully logged in!');
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      toast.error('Failed to get user details');
-    }
+  const login = async () => {
+    try { await loginWithGoogle(); setOpenDailog(false); toast.success('Successfully logged in!'); }
+    catch(error) { toast.error(error.message); }
   };
-
-  const handleLogout = () => {
-    try {
-      googleLogout();
-      localStorage.clear();
-      setUser(null);
-      toast.success('Successfully logged out!');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      toast.error('Failed to logout');
-    }
+  const handleLogout = async () => {
+    try { await logout(); toast.success('Successfully logged out!'); }
+    catch { toast.error('Unable to sign out. Please try again.'); }
   };
 
   return (

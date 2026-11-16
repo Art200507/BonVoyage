@@ -5,10 +5,10 @@ import { useGoogleMapsLoader } from '../components/GoogleMapsLoader';
 import LocationSearch from '../components/LocationSearch';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { useGoogleLogin } from '@react-oauth/google';
+
 import axios from 'axios';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../service/firebaseConfig';
+import { db, auth, loginWithGoogle } from '../service/firebaseConfig';
 import { AI_PROMPT } from '../constants/options';
 import { chatSession } from '../service/AIModal';
 
@@ -31,38 +31,18 @@ export default function CreateTrip() {
     });
   };
 
-  const login = useGoogleLogin({
-    onSuccess: (codeResp) => GetUserProfile(codeResp),
-    onError: (error) => console.log(error)
-  });
-
-  const GetUserProfile = (tokenInfo) => {
-    axios.get(`https://www.googleapis.com/oauth2/v1/userinfo?access_token=${tokenInfo?.access_token}`, {
-      headers: {
-        Authorization: `Bearer ${tokenInfo?.access_token}`,
-        Accept: 'Application/json'
-      }
-    }).then((resp) => {
-      localStorage.setItem('user', JSON.stringify(resp.data));
-      OnGenerateTrip();
-    });
-  };
-
   const OnGenerateTrip = async () => {
-    const user = localStorage.getItem('user');
-
-    if (!user) {
-      toast.error("Please sign in to continue");
-      login();
-      return;
-    }
+    if (loading) return;
+    try {
+      if (!auth?.currentUser) await loginWithGoogle();
+    } catch(error) { toast.error(error.message); return; }
 
     if (!formData?.location || !formData?.noOfDays || !formData?.budget || !formData?.traveler) {
       toast.error("Please fill all details");
       return;
     }
 
-    if (formData.noOfDays > 5) {
+    if (!Number.isInteger(Number(formData.noOfDays)) || Number(formData.noOfDays) < 1 || Number(formData.noOfDays) > 5) {
       toast.error("Maximum trip duration is 5 days");
       return;
     }
@@ -100,20 +80,21 @@ export default function CreateTrip() {
   const SaveAiTrip = async (tripData) => {
     setLoading(true);
     try {
-      const user = JSON.parse(localStorage.getItem('user'));
+      const user = auth?.currentUser;
       if (!user?.email) {
         throw new Error('User not authenticated');
       }
 
-      const docId = Date.now().toString();
+      const docId = crypto.randomUUID();
       const tripDocument = {
         userSelection: formData,
         tripData: {
           ...tripData,
           createdAt: new Date().toISOString(),
-          userId: user.email
+          userId: user.uid
         },
         userEmail: user.email,
+        ownerUid: user.uid,
         id: docId
       };
 

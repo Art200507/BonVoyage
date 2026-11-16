@@ -1,4 +1,4 @@
-import { db } from '@/service/firebaseConfig';
+import { db, auth } from '@/service/firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -64,6 +64,9 @@ function Viewtrip() {
     const GetTripData = async () => {
         try {
             setLoading(true);
+            if (!auth) throw new Error('Sign-in is not configured yet.');
+            await auth.authStateReady();
+            if (!auth.currentUser) throw new Error('Please sign in to view your trip.');
             const docRef = doc(db, 'AITrips', tripId);
             const docSnap = await getDoc(docRef);
 
